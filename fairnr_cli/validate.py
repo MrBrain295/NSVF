@@ -68,7 +68,7 @@ def main(args, override_args=None):
     if use_cuda:
         criterion.cuda()
     criterion.eval()
-    
+
     for subset in args.valid_subset.split(','):
         try:
             task.load_dataset(subset, combine=False, epoch=1)
@@ -90,60 +90,63 @@ def main(args, override_args=None):
             seed=args.seed,
             num_workers=args.num_workers,
             num_shards=args.distributed_world_size,
-            shard_id=args.distributed_rank
-        ).next_epoch_itr(shuffle=False)
+            shard_id=args.distributed_rank).next_epoch_itr(shuffle=False)
 
         progress = progress_bar.progress_bar(
             itr,
             log_format=args.log_format,
             log_interval=args.log_interval,
             prefix=f"valid on '{subset}' subset",
-            default_log_format=('tqdm' if not args.no_progress_bar else 'simple'),
+            default_log_format=('tqdm'
+                                if not args.no_progress_bar else 'simple'),
         )
-        
+
         log_outputs = []
         for i, sample in enumerate(progress):
             sample = utils.move_to_cuda(sample) if use_cuda else sample
             sample = utils.apply_to_sample(
-                lambda t: t.half() if t.dtype is torch.float32 else t, sample) if use_fp16 else sample
+                lambda t: t.half() if t.dtype is torch.float32 else t,
+                sample) if use_fp16 else sample
             try:
                 with torch.no_grad():  # do not save backward passes
                     max_num_rays = 900 * 900
                     if sample['uv'].shape[3] > max_num_rays:
-                        sample['ray_split'] = sample['uv'].shape[3] // max_num_rays
-                    _loss, _sample_size, log_output = task.valid_step(sample, model, criterion)
+                        sample['ray_split'] = sample['uv'].shape[
+                            3] // max_num_rays
+                    _loss, _sample_size, log_output = task.valid_step(
+                        sample, model, criterion)
 
                 progress.log(log_output, step=i)
                 log_outputs.append(log_output)
-            
+
             except TypeError:
                 break
 
         with metrics.aggregate() as agg:
             task.reduce_metrics(log_outputs, criterion)
             log_output = agg.get_smoothed_values()
-        
 
         # summarize all the gpus
         if args.distributed_world_size > 1:
-            all_log_output = list(zip(*distributed_utils.all_gather_list([log_output])))[0]
+            all_log_output = list(
+                zip(*distributed_utils.all_gather_list([log_output])))[0]
             log_output = {
                 key: np.mean([log[key] for log in all_log_output])
                 for key in all_log_output[0]
             }
 
         progress.print(log_output, tag=subset, step=i)
-       
 
 
 def cli_main():
     parser = options.get_validation_parser()
     args = options.parse_args_and_arch(parser)
-    
+
     # only override args that are explicitly given on the command line
     override_parser = options.get_validation_parser()
-    override_args = options.parse_args_and_arch(override_parser, suppress_defaults=True)
-    
+    override_args = options.parse_args_and_arch(override_parser,
+                                                suppress_defaults=True)
+
     # support multi-gpu validation, use all available gpus
     default_world_size = max(1, torch.cuda.device_count())
     if args.distributed_world_size < default_world_size:

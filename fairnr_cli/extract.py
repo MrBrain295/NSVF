@@ -36,7 +36,8 @@ def main(args):
 
     if args.format == 'mc_mesh':
         plydata = model.encoder.export_surfaces(
-            model.field, th=args.mc_threshold, 
+            model.field,
+            th=args.mc_threshold,
             bits=2 * args.mc_num_samples_per_halfvoxel)
     elif args.format == 'voxel_center':
         plydata = model.encoder.export_voxels(False)
@@ -53,19 +54,34 @@ def main(args):
 
 
 def cli_main():
-    parser = argparse.ArgumentParser(description='Extract geometry from a trained model (only for learnable embeddings).')
+    parser = argparse.ArgumentParser(
+        description=
+        'Extract geometry from a trained model (only for learnable embeddings).'
+    )
     parser.add_argument('--path', type=str, required=True)
     parser.add_argument('--output', type=str, required=True)
     parser.add_argument('--name', type=str, default='sparsevoxel')
-    parser.add_argument('--format', type=str, choices=['voxel_center', 'voxel_mesh', 'mc_mesh'])
-    parser.add_argument('--savetext', action='store_true', help='save .ply in plain text')
-    parser.add_argument('--mc-num-samples-per-halfvoxel', type=int, default=8,
-                        help="""the number of point samples every half voxel-size for marching cube. 
+    parser.add_argument('--format',
+                        type=str,
+                        choices=['voxel_center', 'voxel_mesh', 'mc_mesh'])
+    parser.add_argument('--savetext',
+                        action='store_true',
+                        help='save .ply in plain text')
+    parser.add_argument(
+        '--mc-num-samples-per-halfvoxel',
+        type=int,
+        default=8,
+        help=
+        """the number of point samples every half voxel-size for marching cube. 
                         For instance, by setting to 8, it will use (8 x 2) ^ 3 = 4096 points to compute density for each voxel.
                         In practise, the larger this number is, the more accurate surface you get.
                         """)
-    parser.add_argument('--mc-threshold', type=float, default=0.5, 
-                        help="""the threshold used to find the isosurface from the learned implicit field.
+    parser.add_argument(
+        '--mc-threshold',
+        type=float,
+        default=0.5,
+        help=
+        """the threshold used to find the isosurface from the learned implicit field.
                         In our implementation, we define our values as ``1 - exp(-max(0, density))`` 
                         where "0" is empty and "1" is fully occupied.
                         """)

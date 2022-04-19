@@ -22,19 +22,25 @@ def Linear(in_features, out_features, bias=True):
 
 def Embedding(num_embeddings, embedding_dim, padding_idx=None):
     m = nn.Embedding(num_embeddings, embedding_dim, padding_idx=padding_idx)
-    nn.init.normal_(m.weight, mean=0, std=embedding_dim ** -0.5)
+    nn.init.normal_(m.weight, mean=0, std=embedding_dim**-0.5)
     return m
-    
+
 
 class PosEmbLinear(nn.Module):
 
-    def __init__(self, in_dim, out_dim, no_linear=False, scale=1, *args, **kwargs):
+    def __init__(self,
+                 in_dim,
+                 out_dim,
+                 no_linear=False,
+                 scale=1,
+                 *args,
+                 **kwargs):
         super().__init__()
         assert out_dim % (2 * in_dim) == 0, "dimension must be dividable"
         half_dim = out_dim // 2 // in_dim
         emb = math.log(10000) / (half_dim - 1)
         emb = torch.exp(torch.arange(half_dim, dtype=torch.float) * -emb)
-        
+
         self.emb = nn.Parameter(emb, requires_grad=False)
         self.linear = Linear(out_dim, out_dim) if not no_linear else None
         self.scale = scale
@@ -55,7 +61,12 @@ class PosEmbLinear(nn.Module):
 
 class NeRFPosEmbLinear(nn.Module):
 
-    def __init__(self, in_dim, out_dim, angular=False, no_linear=False, cat_input=False):
+    def __init__(self,
+                 in_dim,
+                 out_dim,
+                 angular=False,
+                 no_linear=False,
+                 cat_input=False):
         super().__init__()
         assert out_dim % (2 * in_dim) == 0, "dimension must be dividable"
         L = out_dim // 2 // in_dim
@@ -72,7 +83,7 @@ class NeRFPosEmbLinear(nn.Module):
 
     def forward(self, x):
         assert x.size(-1) == self.in_dim, "size must match"
-        sizes = x.size() 
+        sizes = x.size()
         inputs = x.clone()
 
         if self.angular:
@@ -99,6 +110,7 @@ class FCLayer(nn.Module):
     Reference:
         https://github.com/vsitzmann/pytorch_prototyping/blob/10f49b1e7df38a58fd78451eac91d7ac1a21df64/pytorch_prototyping.py
     """
+
     def __init__(self, in_dim, out_dim, with_ln=True):
         super().__init__()
         self.net = [nn.Linear(in_dim, out_dim)]
@@ -108,10 +120,11 @@ class FCLayer(nn.Module):
         self.net = nn.Sequential(*self.net)
 
     def forward(self, x):
-        return self.net(x) 
+        return self.net(x)
 
 
 class FCBlock(nn.Module):
+
     def __init__(self,
                  hidden_ch,
                  num_hidden_layers,
@@ -137,13 +150,17 @@ class FCBlock(nn.Module):
 
     def init_weights(self, m):
         if type(m) == nn.Linear:
-            nn.init.kaiming_normal_(m.weight, a=0.0, nonlinearity='relu', mode='fan_in')
+            nn.init.kaiming_normal_(m.weight,
+                                    a=0.0,
+                                    nonlinearity='relu',
+                                    mode='fan_in')
 
     def forward(self, input):
         return self.net(input)
 
 
 class InvertableMapping(nn.Module):
+
     def __init__(self, style='simple'):
         super().__init__()
         self.style = style
@@ -152,7 +169,7 @@ class InvertableMapping(nn.Module):
         if self.style == 'simple':
             return x / (1 - x + 1e-7)
         raise NotImplementedError
-    
+
     def g(self, y):  # (0, +inf) --> (0, 1)
         if self.style == 'simple':
             return y / (1 + y)
@@ -160,5 +177,5 @@ class InvertableMapping(nn.Module):
 
     def dy(self, x):
         if self.style == 'simple':
-            return 1 / ((1 - x) ** 2 + 1e-7)
+            return 1 / ((1 - x)**2 + 1e-7)
         raise NotImplementedError

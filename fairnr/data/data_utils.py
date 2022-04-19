@@ -21,7 +21,8 @@ import fairseq.distributed_utils as du
 from plyfile import PlyData, PlyElement
 from fairseq.meters import StopwatchMeter
 
-def get_rank():    
+
+def get_rank():
     try:
         return du.get_rank()
     except AssertionError:
@@ -33,7 +34,7 @@ def get_world_size():
         return du.get_world_size()
     except AssertionError:
         return 1
-        
+
 
 def parse_views(view_args):
     output = []
@@ -59,19 +60,18 @@ def get_uv(H, W, h, w):
     H, W: real image (intrinsics)
     h, w: resized image
     """
-    uv = np.flip(np.mgrid[0: h, 0: w], axis=0).astype(np.float32)
+    uv = np.flip(np.mgrid[0:h, 0:w], axis=0).astype(np.float32)
     uv[0] = uv[0] * float(W / w)
     uv[1] = uv[1] * float(H / h)
     return uv, [float(H / h), float(W / w)]
 
 
-def load_rgb(
-    path, 
-    resolution=None, 
-    with_alpha=True, 
-    bg_color=[1.0, 1.0, 1.0],
-    min_rgb=-1,
-    interpolation='AREA'):
+def load_rgb(path,
+             resolution=None,
+             with_alpha=True,
+             bg_color=[1.0, 1.0, 1.0],
+             min_rgb=-1,
+             interpolation='AREA'):
     if with_alpha:
         img = imageio.imread(path)  # RGB-ALPHA
     else:
@@ -80,56 +80,63 @@ def load_rgb(
     img = skimage.img_as_float32(img).astype('float32')
     H, W, D = img.shape
     h, w = resolution
-    
+
     if D == 3:
-        img = np.concatenate([img, np.ones((img.shape[0], img.shape[1], 1))], -1).astype('float32')
-    
+        img = np.concatenate(
+            [img, np.ones(
+                (img.shape[0], img.shape[1], 1))], -1).astype('float32')
+
     uv, ratio = get_uv(H, W, h, w)
     if (h < H) or (w < W):
         # img = cv2.resize(img, (w, h), interpolation=cv2.INTER_NEAREST).astype('float32')
-        img = cv2.resize(img, (w, h), interpolation=cv2.INTER_AREA).astype('float32')
+        img = cv2.resize(img, (w, h),
+                         interpolation=cv2.INTER_AREA).astype('float32')
 
     if min_rgb == -1:  # 0, 1  --> -1, 1
         img[:, :, :3] -= 0.5
         img[:, :, :3] *= 2.
 
-    img[:, :, :3] = img[:, :, :3] * img[:, :, 3:] + np.asarray(bg_color)[None, None, :] * (1 - img[:, :, 3:])
-    img[:, :, 3] = img[:, :, 3] * (img[:, :, :3] != np.asarray(bg_color)[None, None, :]).any(-1) 
+    img[:, :, :3] = img[:, :, :3] * img[:, :, 3:] + np.asarray(bg_color)[
+        None, None, :] * (1 - img[:, :, 3:])
+    img[:, :, 3] = img[:, :, 3] * (img[:, :, :3] !=
+                                   np.asarray(bg_color)[None, None, :]).any(-1)
     img = img.transpose(2, 0, 1)
-    
+
     return img, uv, ratio
 
 
 def load_depth(path, resolution=None, depth_plane=5):
     if path is None:
         return None
-    
+
     img = cv2.imread(path, cv2.IMREAD_UNCHANGED).astype(np.float32)
     # ret, img = cv2.threshold(img, depth_plane, depth_plane, cv2.THRESH_TRUNC)
-    
+
     H, W = img.shape[:2]
     h, w = resolution
     if (h < H) or (w < W):
-        img  = cv2.resize(img, (w, h), interpolation=cv2.INTER_NEAREST).astype('float32')
+        img = cv2.resize(img, (w, h),
+                         interpolation=cv2.INTER_NEAREST).astype('float32')
         #img = cv2.resize(img, (w, h), interpolation=cv2.INTER_LINEAR)
 
-    if len(img.shape) ==3:
-        img = img[:,:,:1]
-        img = img.transpose(2,0,1)
+    if len(img.shape) == 3:
+        img = img[:, :, :1]
+        img = img.transpose(2, 0, 1)
     else:
-        img = img[None,:,:]
+        img = img[None, :, :]
     return img
 
 
 def load_mask(path, resolution=None):
     if path is None:
         return None
-    
+
     img = cv2.imread(path, cv2.IMREAD_GRAYSCALE).astype(np.float32)
     h, w = resolution
     H, W = img.shape[:2]
     if (h < H) or (w < W):
-        img = cv2.resize(img, (w, h), interpolation=cv2.INTER_NEAREST).astype('float32')
+        img = cv2.resize(img, (w, h),
+                         interpolation=cv2.INTER_NEAREST).astype('float32')
     img = img / (img.max() + 1e-7)
     return img
 
@@ -159,7 +166,7 @@ def load_intrinsics(filepath, resized_width=None, invert_y=False):
 
     # Get camera intrinsics
     with open(filepath, 'r') as file:
-        
+
         f, cx, cy, _ = map(float, file.readline().split())
     fx = f
     if invert_y:
@@ -168,10 +175,8 @@ def load_intrinsics(filepath, resized_width=None, invert_y=False):
         fy = f
 
     # Build the intrinsic matrices
-    full_intrinsic = np.array([[fx, 0., cx, 0.],
-                               [0., fy, cy, 0],
-                               [0., 0, 1, 0],
-                               [0, 0, 0, 1]])
+    full_intrinsic = np.array([[fx, 0., cx, 0.], [0., fy, cy, 0],
+                               [0., 0, 1, 0], [0, 0, 0, 1]])
     return full_intrinsic
 
 
@@ -188,18 +193,19 @@ def square_crop_img(img):
     min_dim = np.amin(img.shape[:2])
     center_coord = np.array(img.shape[:2]) // 2
     img = img[center_coord[0] - min_dim // 2:center_coord[0] + min_dim // 2,
-          center_coord[1] - min_dim // 2:center_coord[1] + min_dim // 2]
+              center_coord[1] - min_dim // 2:center_coord[1] + min_dim // 2]
     return img
 
 
-def sample_pixel_from_image(
-    num_pixel, num_sample, 
-    mask=None, ratio=1.0,
-    use_bbox=False, 
-    center_ratio=1.0,
-    width=512,
-    patch_size=1):
-    
+def sample_pixel_from_image(num_pixel,
+                            num_sample,
+                            mask=None,
+                            ratio=1.0,
+                            use_bbox=False,
+                            center_ratio=1.0,
+                            width=512,
+                            patch_size=1):
+
     if patch_size > 1:
         assert (num_pixel % (patch_size * patch_size) == 0) \
             and (num_sample % (patch_size * patch_size) == 0), "size must match"
@@ -212,10 +218,11 @@ def sample_pixel_from_image(
                 height//patch_size, patch_size, width//patch_size, patch_size
             ).any(1).any(-1).reshape(-1)
         _width = width // patch_size
-        _out = sample_pixel_from_image(_num_pixel, _num_sample, _mask, ratio, use_bbox, _width)
+        _out = sample_pixel_from_image(_num_pixel, _num_sample, _mask, ratio,
+                                       use_bbox, _width)
         _x, _y = _out % _width, _out // _width
         x, y = _x * patch_size, _y * patch_size
-        x = x[:, None, None] + np.arange(patch_size)[None, :, None] 
+        x = x[:, None, None] + np.arange(patch_size)[None, :, None]
         y = y[:, None, None] + np.arange(patch_size)[None, None, :]
         out = x + y * width
         return out.reshape(-1)
@@ -224,14 +231,14 @@ def sample_pixel_from_image(
         r = (1 - center_ratio) / 2.0
         H, W = num_pixel // width, width
         mask0 = np.zeros((H, W))
-        mask0[int(H * r): H - int(H * r), int(W * r): W - int(W * r)] = 1
+        mask0[int(H * r):H - int(H * r), int(W * r):W - int(W * r)] = 1
         mask0 = mask0.reshape(-1)
 
         if mask is None:
             mask = mask0
         else:
             mask = mask * mask0
-    
+
     if mask is not None:
         mask = (mask > 0.0).astype('float32')
 
@@ -245,14 +252,15 @@ def sample_pixel_from_image(
         mask = mask.reshape(-1, width)
         x, y = np.where(mask == 1)
         mask = np.zeros_like(mask)
-        mask[x.min(): x.max()+1, y.min(): y.max()+1] = 1.0
+        mask[x.min():x.max() + 1, y.min():y.max() + 1] = 1.0
         mask = mask.reshape(-1)
 
     try:
-        probs = mask * ratio / (mask.sum()) + (1 - mask) / (num_pixel - mask.sum()) * (1 - ratio)
+        probs = mask * ratio / (mask.sum()) + (1 - mask) / (
+            num_pixel - mask.sum()) * (1 - ratio)
         # x = np.random.choice(num_pixel, num_sample, True, p=probs)
         return np.random.choice(num_pixel, num_sample, True, p=probs)
-    
+
     except Exception:
         return np.random.choice(num_pixel, num_sample)
 
@@ -263,7 +271,13 @@ def colormap(dz):
     # return plt.cm.gray(dz)
 
 
-def recover_image(img, min_val=-1, max_val=1, width=512, bg=None, weight=None, raw=False):
+def recover_image(img,
+                  min_val=-1,
+                  max_val=1,
+                  width=512,
+                  bg=None,
+                  weight=None,
+                  raw=False):
     if raw: return img
 
     sizes = img.size()
@@ -285,8 +299,8 @@ def recover_image(img, min_val=-1, max_val=1, width=512, bg=None, weight=None, r
     img = img.reshape(height, width, -1)
     return img
 
-    
-def write_images(writer, images, updates): 
+
+def write_images(writer, images, updates):
     for tag in images:
         img = images[tag]
         tag, dataform = tag.split(':')
@@ -299,21 +313,29 @@ def compute_psnr(p, t):
     :param ground_truth: Ground truth.
     :return: (psnr, ssim): tuple of floats
     """
-    ssim = skimage.metrics.structural_similarity(p, t, multichannel=True, data_range=1)
+    ssim = skimage.metrics.structural_similarity(p,
+                                                 t,
+                                                 multichannel=True,
+                                                 data_range=1)
     psnr = skimage.metrics.peak_signal_noise_ratio(p, t, data_range=1)
     return ssim, psnr
 
 
 def save_point_cloud(filename, xyz, rgb=None):
     if rgb is None:
-        vertex = np.array([(xyz[k, 0], xyz[k, 1], xyz[k, 2]) for k in range(xyz.shape[0])], 
-            dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4')])
+        vertex = np.array([(xyz[k, 0], xyz[k, 1], xyz[k, 2])
+                           for k in range(xyz.shape[0])],
+                          dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4')])
     else:
-        vertex = np.array([(xyz[k, 0], xyz[k, 1], xyz[k, 2], rgb[k, 0], rgb[k, 1], rgb[k, 2]) for k in range(xyz.shape[0])], 
-            dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4'), ('red', 'u1'), ('green', 'u1'), ('blue', 'u1')])
+        vertex = np.array(
+            [(xyz[k, 0], xyz[k, 1], xyz[k, 2], rgb[k, 0], rgb[k, 1], rgb[k, 2])
+             for k in range(xyz.shape[0])],
+            dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4'), ('red', 'u1'),
+                   ('green', 'u1'), ('blue', 'u1')])
     # PlyData([PlyElement.describe(vertex, 'vertex')], text=True).write(filename)
     # from fairseq import pdb; pdb.set_trace()
-    PlyData([PlyElement.describe(vertex, 'vertex')]).write(open(filename, 'wb'))
+    PlyData([PlyElement.describe(vertex,
+                                 'vertex')]).write(open(filename, 'wb'))
 
 
 class InfIndex(object):
@@ -343,6 +365,7 @@ class InfIndex(object):
 
 
 class Timer(StopwatchMeter):
+
     def __enter__(self):
         """Start a new timer as a context manager"""
         self.start()
@@ -354,6 +377,7 @@ class Timer(StopwatchMeter):
 
 
 class GPUTimer(object):
+
     def __enter__(self):
         """Start a new timer as a context manager"""
         self.start = torch.cuda.Event(enable_timing=True)

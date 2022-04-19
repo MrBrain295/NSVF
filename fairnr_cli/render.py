@@ -7,7 +7,6 @@
 This is a copy of fairseq-generate while simpler for other usage.
 """
 
-
 import logging
 import math
 import os
@@ -27,7 +26,8 @@ def main(args):
 
     if args.results_path is not None:
         os.makedirs(args.results_path, exist_ok=True)
-        output_path = os.path.join(args.results_path, 'generate-{}.txt'.format(args.gen_subset))
+        output_path = os.path.join(args.results_path,
+                                   'generate-{}.txt'.format(args.gen_subset))
         with open(output_path, 'w', buffering=1) as h:
             return _main(args, h)
     else:
@@ -55,7 +55,6 @@ def _main(args, output_file):
     task = tasks.setup_task(args)
     task.load_dataset(args.gen_subset)
 
-
     # Load ensemble
     logger.info('loading model(s) from {}'.format(args.path))
     models, _model_args = checkpoint_utils.load_model_ensemble(
@@ -78,8 +77,7 @@ def _main(args, output_file):
         max_sentences=args.max_sentences,
         max_positions=utils.resolve_max_positions(
             task.max_positions(),
-            *[model.max_positions() for model in models]
-        ),
+            *[model.max_positions() for model in models]),
         ignore_invalid_inputs=args.skip_invalid_size_inputs_valid_test,
         required_batch_size_multiple=args.required_batch_size_multiple,
         num_shards=args.num_shards,
@@ -90,27 +88,29 @@ def _main(args, output_file):
     # Initialize generator
     gen_timer = StopwatchMeter()
     generator = task.build_generator(args)
-    
 
-    output_files, step= [], 0
+    output_files, step = [], 0
     with progress_bar.build_progress_bar(args, itr) as t:
         wps_meter = TimeMeter()
-        for i, sample in enumerate(t):        
+        for i, sample in enumerate(t):
             sample = utils.move_to_cuda(sample) if use_cuda else sample
             gen_timer.start()
-           
-            step, _output_files = task.inference_step(generator, models, [sample, step])
+
+            step, _output_files = task.inference_step(generator, models,
+                                                      [sample, step])
             output_files += _output_files
-        
+
             gen_timer.stop(500)
             wps_meter.update(500)
             t.log({'wps': round(wps_meter.avg)})
-            
+
             break
             # if i > 5:
             #     break
 
-    generator.save_images(output_files, combine_output=args.render_combine_output)
+    generator.save_images(output_files,
+                          combine_output=args.render_combine_output)
+
 
 def cli_main():
     parser = options.get_rendering_parser()

@@ -22,9 +22,10 @@ COLOR_DEPTH = 8
 FORMAT = 'PNG'
 RANDOM_VIEWS = True
 UPPER_VIEWS = True
-CIRCLE_FIXED_START = (.3,0,0)
+CIRCLE_FIXED_START = (.3, 0, 0)
 
-parser = argparse.ArgumentParser(description='Renders given obj file by rotation a camera around it.')
+parser = argparse.ArgumentParser(
+    description='Renders given obj file by rotation a camera around it.')
 parser.add_argument('output', type=str, help='path where files will be saved')
 
 argv = sys.argv
@@ -34,11 +35,13 @@ args = parser.parse_args(argv)
 homedir = args.output
 fp = bpy.path.abspath(f"{homedir}/{RESULTS_PATH}")
 
+
 def listify_matrix(matrix):
     matrix_list = []
     for row in matrix:
         matrix_list.append(list(row))
     return matrix_list
+
 
 if not os.path.exists(fp):
     os.makedirs(fp)
@@ -52,7 +55,6 @@ out_data = {
 
 # Render Optimizations
 bpy.context.scene.render.use_persistent_data = True
-
 
 # Set up rendering of depth map.
 bpy.context.scene.use_nodes = True
@@ -71,18 +73,18 @@ if not DEBUG:
     depth_file_output = tree.nodes.new(type="CompositorNodeOutputFile")
     depth_file_output.label = 'Depth Output'
     if FORMAT == 'OPEN_EXR':
-      links.new(render_layers.outputs['Depth'], depth_file_output.inputs[0])
+        links.new(render_layers.outputs['Depth'], depth_file_output.inputs[0])
     else:
-      # Remap as other types can not represent the full range of depth.
-      map = tree.nodes.new(type="CompositorNodeMapValue")
-      # Size is chosen kind of arbitrarily, try out until you're satisfied with resulting depth map.
-      map.offset = [-0.7]
-      map.size = [DEPTH_SCALE]
-      map.use_min = True
-      map.min = [0]
-      links.new(render_layers.outputs['Depth'], map.inputs[0])
+        # Remap as other types can not represent the full range of depth.
+        map = tree.nodes.new(type="CompositorNodeMapValue")
+        # Size is chosen kind of arbitrarily, try out until you're satisfied with resulting depth map.
+        map.offset = [-0.7]
+        map.size = [DEPTH_SCALE]
+        map.use_min = True
+        map.min = [0]
+        links.new(render_layers.outputs['Depth'], map.inputs[0])
 
-      links.new(map.outputs[0], depth_file_output.inputs[0])
+        links.new(map.outputs[0], depth_file_output.inputs[0])
 
     normal_file_output = tree.nodes.new(type="CompositorNodeOutputFile")
     normal_file_output.label = 'Normal Output'
@@ -93,7 +95,10 @@ bpy.context.scene.render.dither_intensity = 0.0
 bpy.context.scene.render.film_transparent = True
 
 # Create collection for objects not to render with background
-objs = [ob for ob in bpy.context.scene.objects if ob.type in ('EMPTY') and 'Empty' in ob.name]
+objs = [
+    ob for ob in bpy.context.scene.objects
+    if ob.type in ('EMPTY') and 'Empty' in ob.name
+]
 bpy.ops.object.delete({"selected_objects": objs})
 
 # bounding box
@@ -102,9 +107,11 @@ for obj in bpy.context.scene.objects:
         bbox = [obj.matrix_world @ Vector(corner) for corner in obj.bound_box]
         bbox = [min([bb[i] for bb in bbox]) for i in range(3)] + \
                [max([bb[i] for bb in bbox]) for i in range(3)]
-        voxel_size = ((bbox[3]-bbox[0]) * (bbox[4]-bbox[1]) * (bbox[5]-bbox[2]) / VOXEL_NUMS) ** (1/3)
-        print(" ".join(['{:.5f}'.format(f) for f in bbox + [voxel_size]]), 
-            file=open(os.path.join(homedir, 'bbox.txt'), 'w'))
+        voxel_size = ((bbox[3] - bbox[0]) * (bbox[4] - bbox[1]) *
+                      (bbox[5] - bbox[2]) / VOXEL_NUMS)**(1 / 3)
+        print(" ".join(['{:.5f}'.format(f) for f in bbox + [voxel_size]]),
+              file=open(os.path.join(homedir, 'bbox.txt'), 'w'))
+
 
 def parent_obj_to_camera(b_camera):
     origin = (0, 0, 0)
@@ -150,16 +157,16 @@ if not RANDOM_VIEWS:
 
 for i in range(0, VIEWS):
     if DEBUG:
-        i = np.random.randint(0,VIEWS)
-        b_empty.rotation_euler[2] += radians(stepsize*i)
+        i = np.random.randint(0, VIEWS)
+        b_empty.rotation_euler[2] += radians(stepsize * i)
     if RANDOM_VIEWS:
         scene.render.filepath = os.path.join(fp, '{:04d}'.format(i))
         if UPPER_VIEWS:
-            rot = np.random.uniform(0, 1, size=3) * (1,0,2*np.pi)
-            rot[0] = np.abs(np.arccos(1 - 2 * rot[0]) - np.pi/2)
+            rot = np.random.uniform(0, 1, size=3) * (1, 0, 2 * np.pi)
+            rot[0] = np.abs(np.arccos(1 - 2 * rot[0]) - np.pi / 2)
             b_empty.rotation_euler = rot
         else:
-            b_empty.rotation_euler = np.random.uniform(0, 2*np.pi, size=3)
+            b_empty.rotation_euler = np.random.uniform(0, 2 * np.pi, size=3)
     else:
         print("Rotation {}, {}".format((stepsize * i), radians(stepsize * i)))
         scene.render.filepath = os.path.join(fp, '{:04d}'.format(i))
@@ -178,20 +185,23 @@ for i in range(0, VIEWS):
         'rotation': radians(stepsize),
         'transform_matrix': listify_matrix(cam.matrix_world)
     }
-    with open(os.path.join(homedir, "pose", '{:04d}.txt'.format(i)), 'w') as fo:
+    with open(os.path.join(homedir, "pose", '{:04d}.txt'.format(i)),
+              'w') as fo:
         for ii, pose in enumerate(frame_data['transform_matrix']):
-            print(" ".join([str(-p) if (((j == 2) | (j == 1)) and (ii < 3)) else str(p) 
-                            for j, p in enumerate(pose)]), 
-                file=fo)
+            print(" ".join([
+                str(-p) if (((j == 2) | (j == 1)) and (ii < 3)) else str(p)
+                for j, p in enumerate(pose)
+            ]),
+                  file=fo)
     out_data['frames'].append(frame_data)
 
     if RANDOM_VIEWS:
         if UPPER_VIEWS:
-            rot = np.random.uniform(0, 1, size=3) * (1,0,2*np.pi)
-            rot[0] = np.abs(np.arccos(1 - 2 * rot[0]) - np.pi/2)
+            rot = np.random.uniform(0, 1, size=3) * (1, 0, 2 * np.pi)
+            rot[0] = np.abs(np.arccos(1 - 2 * rot[0]) - np.pi / 2)
             b_empty.rotation_euler = rot
         else:
-            b_empty.rotation_euler = np.random.uniform(0, 2*np.pi, size=3)
+            b_empty.rotation_euler = np.random.uniform(0, 2 * np.pi, size=3)
     else:
         b_empty.rotation_euler[2] += radians(stepsize)
 
@@ -199,10 +209,9 @@ if not DEBUG:
     with open(os.path.join(homedir, 'transforms.json'), 'w') as out_file:
         json.dump(out_data, out_file, indent=4)
 
-
 # save camera data
 H, W = RESOLUTION, RESOLUTION
-f = .5 * W /np.tan(.5 * float(out_data['camera_angle_x']))
+f = .5 * W / np.tan(.5 * float(out_data['camera_angle_x']))
 cx = cy = W // 2
 
 # write intrinsics

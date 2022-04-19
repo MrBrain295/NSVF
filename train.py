@@ -15,6 +15,6 @@ if __name__ == '__main__':
         print(slurm_arg)
         print(all_args)
         launch(slurm_arg, all_args)
-    
+
     else:
         cli_main()

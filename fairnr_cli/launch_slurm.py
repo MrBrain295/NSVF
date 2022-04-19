@@ -17,50 +17,70 @@ def launch_cluster(slurm_args, model_args):
         assert (train_log is not None) and (train_stderr is not None)
 
     # parse slurm
-    train_cmd = ['python', 'train.py', ]
+    train_cmd = [
+        'python',
+        'train.py',
+    ]
     train_cmd.extend(['--distributed-world-size', str(nodes * gpus)])
     if nodes > 1:
         train_cmd.extend(['--distributed-port', str(get_random_port())])
-    
+
     train_cmd += model_args
 
     base_srun_cmd = [
-            'srun',
-            '--job-name', jobname,
-            '--output', train_log,
-            '--error', train_stderr,
-            '--open-mode', 'append',
-            '--unbuffered',
-        ]
+        'srun',
+        '--job-name',
+        jobname,
+        '--output',
+        train_log,
+        '--error',
+        train_stderr,
+        '--open-mode',
+        'append',
+        '--unbuffered',
+    ]
     srun_cmd = base_srun_cmd + train_cmd
-    srun_cmd_str = ' '.join(map(shlex.quote, srun_cmd)) 
+    srun_cmd_str = ' '.join(map(shlex.quote, srun_cmd))
     srun_cmd_str = srun_cmd_str + ' &'
 
     sbatch_cmd = [
-                'sbatch',
-                '--job-name', jobname,
-                '--partition', slurm_args.get('partition', 'learnfair'),
-                '--gres', 'gpu:volta:{}'.format(gpus),
-                '--nodes', str(nodes),
-                '--ntasks-per-node', '1',
-                '--cpus-per-task', '48',
-                '--output', train_log,
-                '--error', train_stderr,
-                '--open-mode', 'append',
-                '--signal', 'B:USR1@180',
-                '--time', slurm_args.get('time', '4320'),
-                '--mem', slurm_args.get('mem', '500gb'),
-                '--exclusive',
-            ]
+        'sbatch',
+        '--job-name',
+        jobname,
+        '--partition',
+        slurm_args.get('partition', 'learnfair'),
+        '--gres',
+        'gpu:volta:{}'.format(gpus),
+        '--nodes',
+        str(nodes),
+        '--ntasks-per-node',
+        '1',
+        '--cpus-per-task',
+        '48',
+        '--output',
+        train_log,
+        '--error',
+        train_stderr,
+        '--open-mode',
+        'append',
+        '--signal',
+        'B:USR1@180',
+        '--time',
+        slurm_args.get('time', '4320'),
+        '--mem',
+        slurm_args.get('mem', '500gb'),
+        '--exclusive',
+    ]
     if 'constraint' in slurm_args:
         sbatch_cmd += ['-C', slurm_args.get('constraint')]
     if 'comment' in slurm_args:
         sbatch_cmd += ['--comment', slurm_args.get('comment')]
-    
-    wrapped_cmd = requeue_support() + '\n' + srun_cmd_str + ' \n wait $! \n sleep 610 & \n wait $!'
+
+    wrapped_cmd = requeue_support(
+    ) + '\n' + srun_cmd_str + ' \n wait $! \n sleep 610 & \n wait $!'
     sbatch_cmd += ['--wrap', wrapped_cmd]
     sbatch_cmd_str = ' '.join(map(shlex.quote, sbatch_cmd))
-    
+
     # start training
     env = os.environ.copy()
     env['OMP_NUM_THREADS'] = '2'
@@ -73,16 +93,19 @@ def launch_cluster(slurm_args, model_args):
 
     if slurm_args.get('dry-run', False):
         print(sbatch_cmd_str)
-    
+
     elif slurm_args.get('local', False):
-        assert nodes == 1, 'distributed training cannot be combined with local' 
+        assert nodes == 1, 'distributed training cannot be combined with local'
         if 'CUDA_VISIBLE_DEVICES' not in env:
             env['CUDA_VISIBLE_DEVICES'] = ','.join(map(str, range(gpus)))
         env['NCCL_DEBUG'] = 'INFO'
 
         if train_log is not None:
-            train_proc = subprocess.Popen(train_cmd, env=env, stdout=subprocess.PIPE)
-            tee_proc = subprocess.Popen(['tee', '-a', train_log], stdin=train_proc.stdout)
+            train_proc = subprocess.Popen(train_cmd,
+                                          env=env,
+                                          stdout=subprocess.PIPE)
+            tee_proc = subprocess.Popen(['tee', '-a', train_log],
+                                        stdin=train_proc.stdout)
             train_proc.stdout.close()
             train_proc.wait()
             tee_proc.wait()
@@ -92,7 +115,8 @@ def launch_cluster(slurm_args, model_args):
     else:
         with open(train_log, 'a') as train_log_h:
             print(f'running command: {sbatch_cmd_str}\n')
-            with subprocess.Popen(sbatch_cmd, stdout=subprocess.PIPE, env=env) as train_proc:
+            with subprocess.Popen(sbatch_cmd, stdout=subprocess.PIPE,
+                                  env=env) as train_proc:
                 stdout = train_proc.stdout.read().decode('utf-8')
                 print(stdout, file=train_log_h)
                 try:

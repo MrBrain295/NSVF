@@ -50,7 +50,7 @@ def normalize(x, axis=-1, order=2):
     else:
         l2 = np.linalg.norm(x, order, axis)
         l2 = np.expand_dims(l2, axis)
-        l2[l2==0] = 1
+        l2[l2 == 0] = 1
         return x / l2, l2
 
 
@@ -63,7 +63,7 @@ def parse_extrinsics(extrinsics, world2camera=True):
     if world2camera:
         extrinsics = np.linalg.inv(extrinsics).astype(np.float32)
     return extrinsics
-    
+
 
 def parse_intrinsics(intrinsics):
     fx = intrinsics[0, 0]
@@ -116,13 +116,17 @@ def r6d2mat(d6: torch.Tensor) -> torch.Tensor:
 def get_ray_direction(ray_start, uv, intrinsics, inv_RT, depths=None):
     if depths is None:
         depths = 1
-    rt_cam = uv2cam(uv, depths, intrinsics, True)       
+    rt_cam = uv2cam(uv, depths, intrinsics, True)
     rt = cam2world(rt_cam, inv_RT)
     ray_dir, _ = normalize(rt - ray_start[:, None], axis=0)
     return ray_dir
 
 
-def look_at_rotation(camera_position, at=None, up=None, inverse=False, cv=False):
+def look_at_rotation(camera_position,
+                     at=None,
+                     up=None,
+                     inverse=False,
+                     cv=False):
     """
     This function takes a vector 'camera_position' which specifies the location
     of the camera in world coordinates and two vectors `at` and `up` which
@@ -138,7 +142,7 @@ def look_at_rotation(camera_position, at=None, up=None, inverse=False, cv=False)
         at: 1 x 3 or N x 3  (0, 0, 0) in default
         up: 1 x 3 or N x 3  (0, 1, 0) in default
     """
-       
+
     if at is None:
         at = torch.zeros_like(camera_position)
     else:
@@ -155,7 +159,7 @@ def look_at_rotation(camera_position, at=None, up=None, inverse=False, cv=False)
 
     R = cat([x_axis[:, None], y_axis[:, None], z_axis[:, None]], axis=1)
     return R
-    
+
 
 def ray(ray_start, ray_dir, depths):
     return ray_start + ray_dir * depths
@@ -169,9 +173,9 @@ def compute_normal_map(ray_start, ray_dir, depths, RT, width=512, proj=False):
     cam_coords = D.unflatten_img(cam_coords, width)
 
     # estimate local normal
-    shift_l = cam_coords[:, 2:,  :]
+    shift_l = cam_coords[:, 2:, :]
     shift_r = cam_coords[:, :-2, :]
-    shift_u = cam_coords[:, :, 2: ]
+    shift_u = cam_coords[:, :, 2:]
     shift_d = cam_coords[:, :, :-2]
     diff_hor = normalize(shift_r - shift_l, axis=0)[0][:, :, 1:-1]
     diff_ver = normalize(shift_u - shift_d, axis=0)[0][:, 1:-1, :]
@@ -186,7 +190,8 @@ def compute_normal_map(ray_start, ray_dir, depths, RT, width=512, proj=False):
         wld_coords0 = ray(ray_start, ray_dir, 0).transpose(0, 1)
         cam_coords0 = matmul(RT[:3, :3], wld_coords0) + RT[:3, 3].unsqueeze(-1)
         cam_coords0 = D.unflatten_img(cam_coords0, width)
-        cam_raydir = normalize(cam_coords - cam_coords0, 0)[0].reshape(3, -1).transpose(0, 1)
+        cam_raydir = normalize(cam_coords - cam_coords0,
+                               0)[0].reshape(3, -1).transpose(0, 1)
         proj_factor = (_normal * cam_raydir).sum(-1).abs() * 0.8 + 0.2
         return proj_factor
     return _normal
@@ -202,10 +207,11 @@ def trilinear_interp(p, q, point_feats):
 
 # helper functions for encoder
 
+
 def padding_points(xs, pad):
     if len(xs) == 1:
         return xs[0].unsqueeze(0)
-    
+
     maxlen = max([x.size(0) for x in xs])
     xt = xs[0].new_ones(len(xs), maxlen, xs[0].size(1)).fill_(pad)
     for i in range(len(xs)):
@@ -215,9 +221,10 @@ def padding_points(xs, pad):
 
 def pruning_points(feats, points, scores, depth=0, th=0.5):
     if depth > 0:
-        g = int(8 ** depth)
+        g = int(8**depth)
         scores = scores.reshape(scores.size(0), -1, g).sum(-1, keepdim=True)
-        scores = scores.expand(*scores.size()[:2], g).reshape(scores.size(0), -1)
+        scores = scores.expand(*scores.size()[:2],
+                               g).reshape(scores.size(0), -1)
     alpha = (1 - torch.exp(-scores)) > th
     feats = [feats[i][alpha[i]] for i in range(alpha.size(0))]
     points = [points[i][alpha[i]] for i in range(alpha.size(0))]
@@ -229,12 +236,13 @@ def pruning_points(feats, points, scores, depth=0, th=0.5):
 def offset_points(point_xyz, quarter_voxel=1, offset_only=False, bits=2):
     c = torch.arange(1, 2 * bits, 2, device=point_xyz.device)
     ox, oy, oz = torch.meshgrid([c, c, c])
-    offset = (torch.cat([
-                    ox.reshape(-1, 1), 
-                    oy.reshape(-1, 1), 
-                    oz.reshape(-1, 1)], 1).type_as(point_xyz) - bits) / float(bits - 1)
+    offset = (torch.cat(
+        [ox.reshape(-1, 1),
+         oy.reshape(-1, 1),
+         oz.reshape(-1, 1)], 1).type_as(point_xyz) - bits) / float(bits - 1)
     if not offset_only:
-        return point_xyz.unsqueeze(1) + offset.unsqueeze(0).type_as(point_xyz) * quarter_voxel
+        return point_xyz.unsqueeze(
+            1) + offset.unsqueeze(0).type_as(point_xyz) * quarter_voxel
     return offset.type_as(point_xyz) * quarter_voxel
 
 
@@ -242,32 +250,41 @@ def discretize_points(voxel_points, voxel_size):
     # this function turns voxel centers/corners into integer indeices
     # we assume all points are alreay put as voxels (real numbers)
     minimal_voxel_point = voxel_points.min(dim=0, keepdim=True)[0]
-    voxel_indices = ((voxel_points - minimal_voxel_point) / voxel_size).round_().long()  # float
-    residual = (voxel_points - voxel_indices.type_as(voxel_points) * voxel_size).mean(0, keepdim=True)
+    voxel_indices = ((voxel_points - minimal_voxel_point) /
+                     voxel_size).round_().long()  # float
+    residual = (voxel_points -
+                voxel_indices.type_as(voxel_points) * voxel_size).mean(
+                    0, keepdim=True)
     return voxel_indices, residual
 
 
-def splitting_points(point_xyz, point_feats, values, half_voxel):        
+def splitting_points(point_xyz, point_feats, values, half_voxel):
     # generate new centers
     quarter_voxel = half_voxel * .5
     new_points = offset_points(point_xyz, quarter_voxel).reshape(-1, 3)
     old_coords = discretize_points(point_xyz, quarter_voxel)[0]
     new_coords = offset_points(old_coords).reshape(-1, 3)
-    new_keys0  = offset_points(new_coords).reshape(-1, 3)
-    
+    new_keys0 = offset_points(new_coords).reshape(-1, 3)
+
     # get unique keys and inverse indices (for original key0, where it maps to in keys)
-    new_keys, new_feats = torch.unique(new_keys0, dim=0, sorted=True, return_inverse=True)
+    new_keys, new_feats = torch.unique(new_keys0,
+                                       dim=0,
+                                       sorted=True,
+                                       return_inverse=True)
     new_keys_idx = new_feats.new_zeros(new_keys.size(0)).scatter_(
-        0, new_feats, torch.arange(new_keys0.size(0), device=new_feats.device) // 64)
-    
-    # recompute key vectors using trilinear interpolation 
+        0, new_feats,
+        torch.arange(new_keys0.size(0), device=new_feats.device) // 64)
+
+    # recompute key vectors using trilinear interpolation
     new_feats = new_feats.reshape(-1, 8)
-    
+
     if values is not None:
-        p = (new_keys - old_coords[new_keys_idx]).type_as(point_xyz).unsqueeze(1) * .25 + 0.5 # (1/4 voxel size)
-        q = offset_points(p, .5, offset_only=True).unsqueeze(0) + 0.5   # BUG?
+        p = (new_keys - old_coords[new_keys_idx]
+             ).type_as(point_xyz).unsqueeze(1) * .25 + 0.5  # (1/4 voxel size)
+        q = offset_points(p, .5, offset_only=True).unsqueeze(0) + 0.5  # BUG?
         point_feats = point_feats[new_keys_idx]
-        point_feats = F.embedding(point_feats, values).view(point_feats.size(0), -1)
+        point_feats = F.embedding(point_feats,
+                                  values).view(point_feats.size(0), -1)
         new_values = trilinear_interp(p, q, point_feats)
     else:
         new_values = None
@@ -276,15 +293,18 @@ def splitting_points(point_xyz, point_feats, values, half_voxel):
 
 def expand_points(voxel_points, voxel_size):
     _voxel_size = min([
-        torch.sqrt(((voxel_points[j:j+1] - voxel_points[j+1:]) ** 2).sum(-1).min())
-        for j in range(100)])
+        torch.sqrt(
+            ((voxel_points[j:j + 1] - voxel_points[j + 1:])**2).sum(-1).min())
+        for j in range(100)
+    ])
     depth = int(np.round(torch.log2(_voxel_size / voxel_size)))
     if depth > 0:
         half_voxel = _voxel_size / 2.0
         for _ in range(depth):
-            voxel_points = offset_points(voxel_points, half_voxel / 2.0).reshape(-1, 3)
+            voxel_points = offset_points(voxel_points,
+                                         half_voxel / 2.0).reshape(-1, 3)
             half_voxel = half_voxel / 2.0
-    
+
     return voxel_points, depth
 
 
@@ -295,7 +315,7 @@ def get_edge(depth_pts, voxel_pts, voxel_size, th=0.05):
     a, b = ab[:, 0], ab[:, 1]
     c = voxel_size
     p = (ab.sum(-1) + c) / 2.0
-    h = (p * (p - a) * (p - b) * (p - c)) ** 0.5 / c
+    h = (p * (p - a) * (p - b) * (p - c))**0.5 / c
     return h < (th * voxel_size)
 
 
@@ -304,8 +324,8 @@ def fill_in(shape, hits, input, initial=1.0):
     input_sizes = [k for k in input.size()]
     if (len(input_sizes) == len(shape)) and \
         all([shape[i] == input_sizes[i] for i in range(len(shape))]):
-        return input   # shape is the same no need to fill
-        
+        return input  # shape is the same no need to fill
+
     if isinstance(initial, torch.Tensor):
         output = initial.expand(*shape)
     else:
@@ -323,7 +343,7 @@ def build_easy_octree(points, half_voxel):
     depths = torch.log2(ranges.max().float()).ceil_().long() - 1
     center = (coords.max(0)[0] + coords.min(0)[0]) / 2
     centers, children = build_octree(center, coords, int(depths))
-    centers = centers.float() * half_voxel + residual   # transform back to float
+    centers = centers.float() * half_voxel + residual  # transform back to float
     return centers, children
 
 
